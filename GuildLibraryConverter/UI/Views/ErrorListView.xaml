@@ -1,0 +1,46 @@
+﻿<UserControl x:Class="GuildLibraryConverter.UI.Views.ErrorListView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:GuildLibraryConverter.UI.Views"
+             xmlns:vm="clr-namespace:GuildLibraryConverter.UI.ViewModels"
+             xmlns:dd="clr-namespace:GuildLibraryConverter.Data"
+             xmlns:c="clr-namespace:CalcBinding;assembly=CalcBinding"
+             mc:Ignorable="d" 
+             d:DesignHeight="450" d:DesignWidth="800" d:Background="White"
+             d:DataContext="{x:Static vm:ErrorList.DesignerInstance}">
+    <ScrollViewer VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Hidden">
+        <ItemsControl ItemsSource="{Binding Errors}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="{x:Type dd:QQDocDownloadError}">
+                    <Border BorderThickness="1" BorderBrush="Black" Margin="0 0 0 -1" Padding="2">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition/>
+                                <RowDefinition/>
+                            </Grid.RowDefinitions>
+
+                            <Canvas Width="16" Height="16" Margin="5" Grid.Column="0" Grid.Row="0">
+                                <Path Fill="Black" Data="M4.54.146A.5.5 0 0 1 4.893 0h6.214a.5.5 0 0 1 .353.146l4.394 4.394a.5.5 0 0 1 .146.353v6.214a.5.5 0 0 1-.146.353l-4.394 4.394a.5.5 0 0 1-.353.146H4.893a.5.5 0 0 1-.353-.146L.146 11.46A.5.5 0 0 1 0 11.107V4.893a.5.5 0 0 1 .146-.353L4.54.146zM5.1 1 1 5.1v5.8L5.1 15h5.8l4.1-4.1V5.1L10.9 1H5.1z"/>
+                                <Path Fill="Black" Data="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 4.995z"/>
+                            </Canvas>
+
+                            <StackPanel Grid.Column="1" Grid.Row="0" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Title}" Margin="5"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Grid.Row="1" Visibility="{c:Binding HasDetails}">
+                                <TextBlock Text="{Binding Details}" Margin="5"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net5.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <StartupObject></StartupObject>
+    <ApplicationIcon />
+    <DisableWinExeOutputInference>true</DisableWinExeOutputInference>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\.editorconfig" Link=".editorconfig" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CalcBinding" Version="2.5.2" />
+    <PackageReference Include="CefSharp.OffScreen.NetCore" Version="91.1.210" />
+    <PackageReference Include="CypherBox" Version="1.0.0" />
+    <PackageReference Include="LibGit2Sharp" Version="0.26.2" />
+  </ItemGroup>
+
+</Project>
