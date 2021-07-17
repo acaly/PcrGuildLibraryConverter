@@ -599,10 +599,11 @@ namespace GuildLibraryConverter.Data
                 }
             }
 
-            public volatile string LoadingStageDescription = "";
+            public volatile string LoadingStageDescription = "准备";
 
             public async Task Load(string url)
             {
+                LoadingStageDescription = "渲染万用表页面";
                 var browser = new ChromiumWebBrowser();
                 browser.ResourceRequestHandlerFactory = this;
                 while (!browser.IsBrowserInitialized)
@@ -617,6 +618,7 @@ namespace GuildLibraryConverter.Data
 
                 browser.Dispose();
 
+                LoadingStageDescription = "解析腾讯文档接口返回内容";
                 var allResponses = await Task.WhenAll(_responseTasks);
                 int requestIndex = 0;
                 foreach (var (apiUrl, isOpenDocApi, stream) in allResponses)
@@ -634,12 +636,15 @@ namespace GuildLibraryConverter.Data
                 }
 
                 //Organize teams and sources after all responses have been handled.
+                LoadingStageDescription = "生成json数据";
                 CheckTeamIds();
                 ResolveSourceParents();
                 ResolveCommentReferences();
 
                 //Download images. This is done after loading the page in order to minimize delay of the loading.
+                LoadingStageDescription = "下载图片";
                 await DownloadImages();
+                LoadingStageDescription = "完成";
             }
 
             bool IResourceRequestHandlerFactory.HasHandlers => true;
