@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Data;
 
@@ -17,7 +18,16 @@ namespace GuildLibraryConverter.Data
         {
             WriteIndented = true,
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            PropertyNamingPolicy = new LowerCaseNamingPolicy(),
         };
+
+        public class LowerCaseNamingPolicy : JsonNamingPolicy
+        {
+            public override string ConvertName(string name)
+            {
+                return Regex.Replace(name, "(.)([A-Z][a-z])", "$1_$2").ToLowerInvariant();
+            }
+        }
 
         private static ListDiff<T, (T Old, T New)> CalculateDiff<T, TSelect>(List<T> oldList, List<T> newList, Func<T, TSelect> selector)
             where T : IEquatable<T>

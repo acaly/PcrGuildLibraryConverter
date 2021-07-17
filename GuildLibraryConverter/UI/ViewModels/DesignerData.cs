@@ -137,8 +137,8 @@ namespace GuildLibraryConverter.UI.ViewModels
                     },
                     new QQDocDownloadError
                     {
-                        ErrorType = QQDocDownloadErrorType.CommentInvalidTarget,
-                        Title = "原始数据格式错误：带箭头的备注指向无效的单元格",
+                        ErrorType = QQDocDownloadErrorType.CommentMultipleTarget,
+                        Title = "原始数据格式错误：带箭头的备注指向多个单元格",
                         CellCoordinate = "A1",
                         CellText = "text→",
                     },

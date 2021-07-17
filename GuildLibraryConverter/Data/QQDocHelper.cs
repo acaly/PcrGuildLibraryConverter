@@ -85,6 +85,7 @@ namespace GuildLibraryConverter.Data
 
             private readonly Dictionary<(int Row, int Column), Source> _sources = new();
             private readonly List<(int Row, int Column, string Text)> _comments = new();
+            private readonly List<((int Row, int Column)[], string Text)> _multiComments = new();
 
             //Outputs.
             public List<Team> Results { get; } = new();
@@ -133,13 +134,44 @@ namespace GuildLibraryConverter.Data
                     }
                     else
                     {
-                        Errors.Add(new QQDocDownloadError
+                        //No longer consider this as an error.
+                        //Errors.Add(new QQDocDownloadError
+                        //{
+                        //    ErrorType = QQDocDownloadErrorType.CommentInvalidTarget,
+                        //    CellCoordinate = MakeCellCoordinate(row, column),
+                        //    Title = "原始数据格式错误：带箭头的备注指向无效的单元格",
+                        //    Details = text,
+                        //});
+                    }
+                }
+                foreach (var (targets, text) in _multiComments)
+                {
+                    Source source = null;
+                    foreach (var (row, col) in targets)
+                    {
+                        if (_sources.TryGetValue((row, col), out var newSource))
                         {
-                            ErrorType = QQDocDownloadErrorType.CommentInvalidTarget,
-                            CellCoordinate = MakeCellCoordinate(row, column),
-                            Title = "原始数据格式错误：带箭头的备注指向无效的单元格",
-                            Details = text,
-                        });
+                            if (source is null)
+                            {
+                                source = newSource;
+                            }
+                            else
+                            {
+                                Errors.Add(new QQDocDownloadError
+                                {
+                                    ErrorType = QQDocDownloadErrorType.CommentMultipleTarget,
+                                    CellCoordinate = string.Join(", ", targets.Select(t => MakeCellCoordinate(t.Row, t.Column))),
+                                    Title = "原始数据格式错误：带箭头的备注指向多个的单元格",
+                                    Details = text,
+                                });
+                                source = null;
+                                break;
+                            }
+                        }
+                    }
+                    if (source is not null)
+                    {
+                        source.Comments.Add(text);
                     }
                 }
             }
@@ -199,7 +231,7 @@ namespace GuildLibraryConverter.Data
             private static readonly Regex _damageRangeW = new Regex("(\\d+)[~-](\\d+)w");
             private static readonly Regex _damageValueW = new Regex("(\\d+)w");
 
-            private bool ParseSourceDescriptionText(string description, Source source)
+            private bool ParseSourceDescriptionText(string description, Source source, int row, int col)
             {
                 string author = null;
                 foreach (var a in _authors)
@@ -212,7 +244,15 @@ namespace GuildLibraryConverter.Data
                 }
                 if (author is null)
                 {
-                    return false;
+                    //Don't add as error.
+                    //Errors.Add(new QQDocDownloadError
+                    //{
+                    //    ErrorType = QQDocDownloadErrorType.NoAuthor,
+                    //    Title = "无法识别作者名",
+                    //    Details = description,
+                    //    CellText = description,
+                    //    CellCoordinate = MakeCellCoordinate(row, col),
+                    //});
                 }
                 source.Author = author;
 
@@ -244,50 +284,60 @@ namespace GuildLibraryConverter.Data
                 return true;
             }
 
-            private bool TryParseReferencingDescription(string description, int row, int col,
-                out (int Row, int Column) referee)
+            private void TryAddComment(string description, int row, int col)
             {
                 int count = 0;
-                referee = default;
-                if (description.Contains('↑', StringComparison.Ordinal))
+                bool up = description.Contains('↑', StringComparison.Ordinal);
+                bool down = description.Contains('↓', StringComparison.Ordinal);
+                bool left = description.Contains('←', StringComparison.Ordinal);
+                bool right = description.Contains('→', StringComparison.Ordinal);
+                var targetRow = row;
+                var targetCol = col;
+                if (up)
                 {
                     count += 1;
-                    referee = (-1, 0);
+                    targetRow -= 1;
                 }
-                if (description.Contains('↓', StringComparison.Ordinal))
+                if (down)
                 {
                     count += 1;
-                    referee = (1, 0);
+                    targetRow += 1;
                 }
-                if (description.Contains('←', StringComparison.Ordinal))
+                if (left)
                 {
                     count += 1;
-                    referee = (0, -1);
+                    targetCol -= 1;
                 }
-                if (description.Contains('→', StringComparison.Ordinal))
+                if (right)
                 {
                     count += 1;
-                    referee = (0, 1);
+                    targetCol += 1;
                 }
-                if (count == 0)
+
+                if (count == 1)
                 {
-                    return false;
+                    _comments.Add((targetRow, targetCol, description));
                 }
-                else if (count == 1)
+                else if (count > 1)
                 {
-                    referee = (referee.Row + row, referee.Column + col);
-                    return true;
-                }
-                else
-                {
-                    Errors.Add(new QQDocDownloadError
-                    {
-                        ErrorType = QQDocDownloadErrorType.CommentMultipleTarget,
-                        CellCoordinate = MakeCellCoordinate(row, col),
-                        Title = "原始数据格式错误：带箭头的备注指向多个单元格",
-                        Details = description,
-                    });
-                    return false;
+                    //Pointing to multiple cells. Store this in _multiComments list and resolve later.
+                    var targets = new (int Row, int Column)[count];
+                    int i = 0;
+                    if (up) targets[i++] = (row - 1, col);
+                    if (down) targets[i++] = (row + 1, col);
+                    if (left) targets[i++] = (row, col - 1);
+                    if (right) targets[i++] = (row, col + 1);
+                    _multiComments.Add((targets, description));
+
+                    //No longer considered as an error.
+                    //Errors.Add(new QQDocDownloadError
+                    //{
+                    //    ErrorType = QQDocDownloadErrorType.CommentMultipleTarget,
+                    //    CellCoordinate = MakeCellCoordinate(row, col),
+                    //    Title = "原始数据格式错误：带箭头的备注指向多个单元格",
+                    //    Details = description,
+                    //});
+                    //return false;
                 }
             }
 
@@ -295,11 +345,22 @@ namespace GuildLibraryConverter.Data
             {
                 var text = element.TryGetProperty("2", out var textElement) ? textElement[1].ToString() : null;
                 var link = element.TryGetProperty("6", out var linkElement) ? linkElement.GetString() : null;
+                var underline =
+                    element.TryGetProperty("8", out var styleElement) &&
+                    styleElement.ValueKind == JsonValueKind.Array && styleElement.GetArrayLength() > 0 &&
+                    styleElement[0].ValueKind == JsonValueKind.Array && styleElement[0].GetArrayLength() > 1 &&
+                    styleElement[0][1].TryGetProperty("6", out var underlineElement) &&
+                    underlineElement.TryGetInt32(out var ul) ? ul == 1 : false;
+                if (underline)
+                {
 
+                }
+
+                bool hasText = !string.IsNullOrWhiteSpace(text);
                 switch (col)
                 {
                 case 0: //Boss name.
-                    if (!string.IsNullOrWhiteSpace(text))
+                    if (hasText)
                     {
                         _currentRow = row;
                         _currentTeam = new Team
@@ -310,7 +371,7 @@ namespace GuildLibraryConverter.Data
                     }
                     break;
                 case 1: //Team id.
-                    if (!string.IsNullOrWhiteSpace(text))
+                    if (hasText)
                     {
                         _currentTeam.Id = text;
                         //Id containing 't' (e.g. ct101) is auto.
@@ -325,7 +386,7 @@ namespace GuildLibraryConverter.Data
                 case 4:
                 case 5:
                 case 6:
-                    if (!string.IsNullOrWhiteSpace(text))
+                    if (hasText)
                     {
                         _currentTeam.Characters.Add(new Character()
                         {
@@ -334,7 +395,7 @@ namespace GuildLibraryConverter.Data
                     }
                     break;
                 case 7: //Damage
-                    if (!string.IsNullOrWhiteSpace(text) && text[^1] == 'w' && int.TryParse(text[..^1], out var damageW))
+                    if (hasText && text[^1] == 'w' && int.TryParse(text[..^1], out var damageW))
                     {
                         _currentTeam.StandardDamage = damageW * 10000;
                         if (_currentTeam.Boss is not null &&
@@ -380,41 +441,49 @@ namespace GuildLibraryConverter.Data
                     }
                     break;
                 case 8: //Description
-                    if (!string.IsNullOrWhiteSpace(text))
+                    if (hasText)
                     {
                         _currentTeam.Comments.Add(text);
                     }
                     break;
                 case > 9:
                     //Sources
-                    if (!string.IsNullOrWhiteSpace(text) &&
+                    if (hasText &&
                         !string.IsNullOrWhiteSpace(link) &&
                         !_images.ContainsKey((row, col)))
                     {
                         //Has text and link but no image. This is a valid normal source.
                         var source = new Source();
-                        if (ParseSourceDescriptionText(text, source))
+                        if (ParseSourceDescriptionText(text, source, row, col))
                         {
                             source.Links.Add(link);
                             _sources.Add((row, col), source);
                         }
                     }
-                    else if (!string.IsNullOrWhiteSpace(text) &&
+                    else if (hasText &&
                         string.IsNullOrWhiteSpace(link) &&
                         _images.TryGetValue((row, col), out var imageUrl))
                     {
                         //Has text and image but no link. This is a valid image source.
                         var source = new Source();
-                        if (ParseSourceDescriptionText(text, source))
+                        if (ParseSourceDescriptionText(text, source, row, col))
                         {
                             source.Images.Add(imageUrl);
                             _sources.Add((row, col), source);
                         }
                     }
-                    else if (!string.IsNullOrWhiteSpace(text) &&
-                        TryParseReferencingDescription(text, row, col, out var referee))
+                    else if (hasText && underline)
                     {
-                        _comments.Add((referee.Row, referee.Column, text));
+                        //Has text and text is manually set with underline style. Add as source.
+                        var source = new Source();
+                        if (ParseSourceDescriptionText(text, source, row, col))
+                        {
+                            _sources.Add((row, col), source);
+                        }
+                    }
+                    else if (hasText)
+                    {
+                        TryAddComment(text, row, col);
                     }
                     break;
                 }

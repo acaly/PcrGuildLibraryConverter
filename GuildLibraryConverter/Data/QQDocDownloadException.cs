@@ -9,13 +9,12 @@ namespace GuildLibraryConverter.Data
     enum QQDocDownloadErrorType
     {
         ClrException,
-        NetworkError,
-        InvalidApiResponse,
         InvalidHeaderFormat,
-        InvalidTextFormat,
+        InvalidTextFormat, //Not an error.
         CommentMultipleTarget,
-        CommentInvalidTarget,
+        CommentInvalidTarget, //Not an error.
         DuplicateTeamId,
+        NoAuthor, //Not an error.
     }
 
     class QQDocDownloadError
