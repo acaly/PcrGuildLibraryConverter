@@ -4,11 +4,13 @@ using CefSharp.OffScreen;
 using CefSharp.Web;
 using System;
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -74,7 +76,7 @@ namespace GuildLibraryConverter.Data
                 }
             }
 
-            private readonly List<Task<(string Url, bool IsOpenDocApi, MemoryStream Stream)>> _responseTasks = new();
+            private readonly ConcurrentQueue<Task<(string Url, bool IsOpenDocApi, MemoryStream Stream)>> _responseTasks = new();
 
             //Input.
             private readonly string[] _authors;
@@ -90,7 +92,7 @@ namespace GuildLibraryConverter.Data
             //Outputs.
             public List<Team> Results { get; } = new();
             public List<QQDocDownloadError> Errors { get; } = new();
-            public List<(string Url, byte[] Data)> RawData { get; } = new();
+            public List<(string Url, string Filename, byte[] Data)> RawData { get; } = new();
 
             public QQDocDownloadHandler(string authorFile)
             {
@@ -177,6 +179,17 @@ namespace GuildLibraryConverter.Data
             }
 
             private static readonly HttpClient _imageDownloadClient = new();
+            private static readonly Dictionary<string, string> _imgExtensionMap = new()
+            {
+                { "image/bmp", ".bmp" },
+                { "image/jpeg", ".jpg" },
+                { "image/pict", ".pic" },
+                { "image/png", ".png" },
+                { "image/x-png", ".png" },
+                { "image/tiff", ".tiff" },
+                { "image/x-macpaint", ".mac" },
+                { "image/x-quicktime", ".qti" },
+            };
 
             private async Task DownloadImages()
             {
@@ -194,25 +207,36 @@ namespace GuildLibraryConverter.Data
                 else
                 {
                     //Concurrently download all images and encode as base64.
-                    static async Task DownloadImageListAsync(List<string> list)
+                    async Task DownloadImageListAsync(string id, Source source)
                     {
+                        var list = source.Images;
                         for (int i = 0; i < list.Count; ++i)
                         {
                             try
                             {
-                                var data = await _imageDownloadClient.GetByteArrayAsync(list[i]);
-                                list[i] = Convert.ToBase64String(data);
+                                var response = await _imageDownloadClient.GetAsync(list[i]);
+                                var responseType = response.Content.Headers.ContentType;
+                                var data = await response.Content.ReadAsByteArrayAsync();
+                                if (!_imgExtensionMap.TryGetValue(responseType.MediaType, out var ext))
+                                {
+                                    ext = ".dat";
+                                }
+                                var hash = string.Concat(MD5.HashData(data).Select(d => d.ToString("X2", CultureInfo.InvariantCulture)));
+                                var filename = $"img-{id}-{hash}{ext}";
+                                lock (RawData)
+                                {
+                                    RawData.Add((list[i], filename, data));
+                                }
                             }
                             catch
                             {
-                                list[i] = null;
                             }
                         }
                     }
                     await Task.WhenAll(Results
-                        .SelectMany(l => l.Sources)
-                        .Where(s => s.Images.Count > 0)
-                        .Select(s => DownloadImageListAsync(s.Images)));
+                        .SelectMany(l => l.Sources.Select(s => (Id: l.Id, Source: s)))
+                        .Where(s => s.Source.Images.Count > 0)
+                        .Select(s => DownloadImageListAsync(s.Id, s.Source)));
                 }
             }
 
@@ -594,17 +618,19 @@ namespace GuildLibraryConverter.Data
                 browser.Dispose();
 
                 var allResponses = await Task.WhenAll(_responseTasks);
+                int requestIndex = 0;
                 foreach (var (apiUrl, isOpenDocApi, stream) in allResponses)
                 {
                     if (isOpenDocApi)
                     {
                         ProcessOpenDocApi(stream);
+                        RawData.Add((apiUrl, $"request{requestIndex++}.js", stream.ToArray()));
                     }
                     else
                     {
                         ProcessSheetApi(stream);
+                        RawData.Add((apiUrl, $"request{requestIndex++}.json", stream.ToArray()));
                     }
-                    RawData.Add((apiUrl, stream.ToArray()));
                 }
 
                 //Organize teams and sources after all responses have been handled.
@@ -630,9 +656,8 @@ namespace GuildLibraryConverter.Data
             {
                 if (request.Url.StartsWith("https://docs.qq.com/dop-api/opendoc", StringComparison.Ordinal))
                 {
-                    //Will this cause the list to be accessed concurrently? Hopefully not.
                     var f = new ResourceFilter() { Url = request.Url, IsOpenDocApi = true };
-                    _responseTasks.Add(f.Task);
+                    _responseTasks.Enqueue(f.Task);
                     return f;
                 }
                 else if (request.Url.StartsWith("https://docs.qq.com/dop-api/get/sheet", StringComparison.Ordinal))
@@ -643,7 +668,7 @@ namespace GuildLibraryConverter.Data
                     if (tab == subId)
                     {
                         var f = new ResourceFilter() { Url = request.Url, IsOpenDocApi = false };
-                        _responseTasks.Add(f.Task);
+                        _responseTasks.Enqueue(f.Task);
                         return f;
                     }
                     return null;
@@ -652,7 +677,7 @@ namespace GuildLibraryConverter.Data
             }
         }
 
-        public static async Task<(List<Team> Data, List<(string Url, byte[] Response)> RawData)> DownloadFromQQDocument(string url)
+        public static async Task<(List<Team> Data, List<(string Url, string Filename, byte[] Response)> RawData)> DownloadFromQQDocument(string url)
         {
             var handler = new QQDocDownloadHandler("authors.txt");
 

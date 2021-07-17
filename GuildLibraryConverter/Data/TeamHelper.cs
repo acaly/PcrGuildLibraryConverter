@@ -147,11 +147,11 @@ namespace GuildLibraryConverter.Data
 
         private record SerializedRawDataInfo(string Url, string Filename);
 
-        public static async Task SerializeRawDataIndex(IEnumerable<string> data, string filename)
+        public static async Task SerializeRawDataIndex(IEnumerable<(string Url, string Filename, byte[])> data, string filename)
         {
             using var file = File.OpenWrite(filename);
             file.SetLength(0);
-            await JsonSerializer.SerializeAsync(file, data.Select((url, i) => new SerializedRawDataInfo(url, $"{i}.data")), _jsonOptions);
+            await JsonSerializer.SerializeAsync(file, data.Select((d) => new SerializedRawDataInfo(d.Url, d.Filename)), _jsonOptions);
         }
 
         private class StringDiffConverter_ : IValueConverter

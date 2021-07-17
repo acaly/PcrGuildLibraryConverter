@@ -44,7 +44,6 @@ namespace GuildLibraryConverter.Data
             try
             {
                 var result = await _browser.EvaluateScriptAsync("eval", "conv_" + response);
-                //var result = await _browser.EvaluateScriptAsync("conv_clientVarsCallback", "abc");
                 return (string)result.Result;
             }
             finally

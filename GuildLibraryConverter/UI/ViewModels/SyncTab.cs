@@ -106,11 +106,11 @@ namespace GuildLibraryConverter.UI.ViewModels
                         }
                         Directory.CreateDirectory(rawDataDir);
                         var indexFilename = Path.Combine(rawDataDir, "index.json");
-                        await TeamHelper.SerializeRawDataIndex(rawData.Select(d => d.Url), indexFilename);
+                        await TeamHelper.SerializeRawDataIndex(rawData, indexFilename);
                         for (int i = 0; i < rawData.Count; ++i)
                         {
-                            var (url, bytes) = rawData[i];
-                            await File.WriteAllBytesAsync(Path.Combine(rawDataDir, $"{i}.dat"), bytes);
+                            var (url, filename, bytes) = rawData[i];
+                            await File.WriteAllBytesAsync(Path.Combine(rawDataDir, filename), bytes);
                         }
                     }
 
